@@ -1,0 +1,8 @@
+ql arrow-macros 2020-03-25
+ql anaphora 2020-03-25
+ql cl-ppcre 2020-03-25
+ql trivial-timeout 2020-03-25
+ql alexandria 2020-03-25
+ql trivia 2020-03-25
+git herodotus https://github.com/HenryS1/herodotus.git :tag v1.1.0
+git bot-match https://github.com/HenryS1/bot-match.git :branch master

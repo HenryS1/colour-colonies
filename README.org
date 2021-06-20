@@ -1,0 +1,18 @@
+* Colour-Colonies 
+
+** About
+
+A game where players move around and claim locations by laying down
+tiles of their own colour.
+
+** Author
+
+Henry and Ed
+
+** Copyright
+
+Copyright (c) 2021 Henry and Ed
+
+** License
+
+Licensed under the MIT License.
