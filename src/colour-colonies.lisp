@@ -14,7 +14,7 @@
    (colour :accessor colour :initarg :colour)
    (score :accessor score :initarg :score :initform 0)))
 
-(defclass colour-colonies-game (concrete-game)
+(defclass colour-colonies (game-state)
   ((turns-remaining :accessor turns-remaining :initarg :turns-remaining :initform 200)
    (current-turn :accessor current-turn :initarg :current-turn :initform 0)
    (rows :accessor rows :initarg :rows :initform 20)
@@ -29,10 +29,11 @@
         (collect (cons (colour player) (player-position player)))))
 
 (defun coord-is-open (coord game)
-  (and (not (gethash coord (squares game)))
-       (not (gethash coord (players game)))
-       (>= (- (cols game) 1) col 0)
-       (>= (- (rows game) 1) row 0)))
+  (destructuring-bind (row . column) coord
+    (and (not (gethash coord (squares game)))
+         (not (gethash coord (players game)))
+         (>= (- (cols game) 1) column 0)
+         (>= (- (rows game) 1) row 0))))
 
 (defun has-open-neighbour (player game)
   (iter (with (row . col) = (player-position player))
@@ -43,7 +44,7 @@
                 (return-from has-open-neighbour t)))
         (finally (return nil))))
 
-(defmethod player-can-take-turn ((game colour-colonies-game) bot-id)
+(defmethod player-can-take-turn ((game colour-colonies) bot-id)
   (let ((player (gethash bot-id (player-ids game))))
     (or (not (gethash (player-position player) (squares game)))
         (has-open-neighbour player game))))
@@ -53,11 +54,11 @@
         (when (player-can-take-turn player) (leave t))
         (finally (return nil))))
 
-(defmethod is-finished? ((game colour-colonies-game))
+(defmethod is-finished? ((game colour-colonies))
   (with-slots (squares turns-remaining rows cols players) game
     (or (= turns-remaining 0)
         (= (hash-table-count squares) (* rows cols))
-        (not (some-bot-can-take-turn game)))))
+        (not (some-player-can-take-turn game)))))
 
 (define-json-model player-command (player command details))
 
@@ -66,25 +67,26 @@
       (progn
         (push (make-instance 'player-command :player (colour player) 
                              :command 'build
-                             :details (alist-hash-table (list (cons 'position (player-position player)))))
+                             :details (alist-hash-table (list (cons 'position
+                                                                    (player-position player)))))
               (car (move-history game)))
         (setf (gethash (player-position player) (squares game)) (colour player)))
       (format t "Can't build on occupied square ~a~%" (player-position player))))
 
 (defun move (player row column game)
-  (if (and (not (gethash (cons row column) (squares game)))
-           (not (gethash (cons row column) (players game)))
-           (>= (- (cols game) 1) col 0)
-           (>= (- (rows game) 1) row 0))
-      (progn (push (make-instance 'player-command :player (colour player)
-                                  :command 'move
-                                  :details (alist-hash-table 
-                                            (list (cons 'starting-position (player-position player))
-                                                  (cons 'ending-position (cons row column)))))
-                   (car (move-history game)))
-             (remhash (player-position player) (players game))
-             (setf (gethash (cons row column) (players game)) player))
-      (format t "Can't move to occupied square ~a~%" (cons row column))))
+  (let ((coord (cons row column)))
+    (if (coord-is-open coord game)
+        (progn (push (make-instance 'player-command :player (colour player)
+                                    :command 'move
+                                    :details (alist-hash-table 
+                                              (list (cons 'starting-position 
+                                                          (player-position player))
+                                                    (cons 'ending-position
+                                                          coord))))
+                     (car (move-history game)))
+               (remhash (player-position player) (players game))
+               (setf (gethash coord (players game)) player))
+        (format t "Can't move to occupied square ~a~%" coord))))
 
 (defun null-move (player game)
   (push (make-instance 'player-command :player (colour player)
@@ -92,7 +94,7 @@
                        :details (make-hash-table))
         (car (move-history game))))
 
-(defmethod update-game-state ((game colour-colonies-game) bot-output bot-id)
+(defmethod update-game-state ((game colour-colonies) bot-output bot-id)
   (when bot-output
     (let (*read-eval*
           (player (gethash bot-id (player-ids game))))
@@ -103,16 +105,18 @@
          (move player row col game))
         (t (null-move player game))))))
 
-(defmethod update-game-turn ((game colour-colonies-game))
+(defmethod update-game-turn ((game colour-colonies))
   (decf (turns-remaining game))
   (format t "turn ~a moves ~a~%" (current-turn game) (to-json (car (move-history game))))
   (push nil (move-history game)))
 
-(defmethod get-bot-input ((game colour-colonies-game))
+(defmethod get-bot-input ((game colour-colonies))
   (format nil "~a" (to-json (alist-hash-table 
                              (list (cons 'previous-turn (or (cadr (move-history game)) (vector)))
                                    (cons 'player-positions (alist-hash-table 
                                                             (player-positions game))))))))
+
+(defparameter *base-path* (directory-namestring #.*compile-file-truename*))
 
 (defun run-bots ()
   (loop for i from 1 to 2
@@ -140,8 +144,10 @@
                                      :id (bot-id bot)
                                      :colour colour))
         (setf (gethash position players) player)
-        (setf (gethash bot-id player-ids) player)
+        (setf (gethash (bot-id bot) player-ids) player)
         (finally (return (cons player-ids players)))))
+
+(defclass colour-colonies-game (colour-colonies concrete-game) ())
 
 (defun run-game ()
   (format t "running game~%")

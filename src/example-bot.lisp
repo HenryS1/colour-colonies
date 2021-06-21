@@ -27,8 +27,7 @@
                  (remhash player-position (player-positions state))
                  (setf (gethash (coerce 'list (gethash "ending-position" (details player-command)))
                                 (player-positions state))
-                       (player player-command))))
-              (t ()))))
+                       (player player-command)))))))
 
 (defun initialise-state (player-positions state)
   (setf (player-positions state) player-positions))
